@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Weather App with Video Background</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
+  <style>
+    :root {
+      --bg-gradient: linear-gradient(135deg, #71b7e6, #9b59b6);
+      --card-bg: rgba(255,255,255,0.95);
+      --font: #333;
+      --detail-bg: rgba(0,0,0,0.05);
+      --btn-bg: #2c3e50;
+      --btn-cl: #fff;
+      --shadow: 0 4px 15px rgba(0,0,0,0.20);
+    }
+    [data-theme='dark'] {
+      --bg-gradient: linear-gradient(135deg, #232526, #2c3e50);
+      --card-bg: rgba(27,29,34,0.98);
+      --font: #f3f3f3;
+      --detail-bg: rgba(255,255,255,0.05);
+      --btn-bg: #e67e22;
+      --btn-cl: #fff;
+      --shadow: 0 4px 25px rgba(32,32,32,0.5);
+    }
+
+    /* Video Background Styling */
+    #bg-video {
+      position: fixed;
+      top: 0; left: 0;
+      min-width: 100vw; min-height: 100vh;
+      width: auto; height: auto;
+      z-index: -2;
+      object-fit: cover;
+      opacity: 0.7;
+      transition: opacity 0.8s ease;
+      pointer-events: none;
+    }
+
+    /* Video overlay for better text readability */
+    .video-overlay {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      background: rgba(0,0,0,0.2);
+      z-index: -1;
+      pointer-events: none;
+    }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-family: Arial,sans-serif;
+      color: var(--font);
+      transition: background 0.3s;
+      position: relative;
+      overflow-x: hidden;
+      /* fallback gradient if video fails */
+      background: var(--bg-gradient);
+    }
+
+    /* ---- Animated Backgrounds (kept as fallback) ---- */
+    /* Default/Sunny */
+    .sunny-bg {
+      background: linear-gradient(120deg, #ffe259, #ffa751, #ffd97d, #ffb347, #fdc830);
+      background-size: 400% 400%;
+      animation: sunnyAnim 15s linear infinite;
+    }
+    @keyframes sunnyAnim {
+      0% {background-position: 0% 50%;}
+      50% {background-position: 100% 50%;}
+      100% {background-position: 0% 50%;}
+    }
+
+    /* Rainy */
+    .rainy-bg {
+      background: linear-gradient(177deg, #a1c4fd 0%, #c2e9fb 100%);
+      overflow: hidden;
+      background-size: 100% 100%;
+    }
+    .rain-drop {
+      position: absolute;
+      width: 2px;
+      height: 20px;
+      background: #9be2feac;
+      top: -20px;
+      left: 0;
+      border-radius: 2px;
+      opacity: 0.8;
+      pointer-events: none;
+      animation: rainDrop 1s linear infinite;
+      z-index: 1;
+    }
+    @keyframes rainDrop {
+      0% {top: -20px;}
+      100% {top: 102vh;}
+    }
+
+    /* Snowy */
+    .snowy-bg {
+      background: linear-gradient(135deg, #e0eafc, #cfdef3, #b1c2e3, #dae2f8);
+      overflow: hidden;
+      background-size: 110% 110%;
+    }
+    .snowflake {
+      position: absolute;
+      font-size: 1.3rem;
+      color: #fff;
+      opacity: 0.85;
+      left: 50%;
+      top: -10px;
+      animation: snowFall 8s linear infinite;
+      user-select: none;
+      pointer-events: none;
+      z-index: 1;
+      filter: drop-shadow(0 2px 3px #bdd9ee88);
+    }
+    @keyframes snowFall {
+      0% {transform: translateY(0) rotate(0deg);}
+      70% {opacity: 1;}
+      100% {transform: translateY(110vh) rotate(360deg); opacity: 0.6;}
+    }
+
+    /* Thunderstorm */
+    .stormy-bg {
+      background: radial-gradient(circle at 60% 110%, #232526 74%, #2c3e50 100%);
+      position: relative;
+      overflow: hidden;
+      animation: stormAnim 9s ease-in-out infinite;
+    }
+    @keyframes stormAnim {
+      0%,100% { filter: brightness(1);}
+      40%,60% { filter: brightness(0.72);}
+      50% { filter: brightness(1.3);}
+    }
+    .lightning {
+      position: absolute;
+      left: 48vw;
+      top: 10vh;
+      width: 9vw;
+      height: 35vh;
+      background: linear-gradient(130deg,#fffad4 70%,#fff 98%, #fffce5 100%);
+      opacity: 0;
+      border-radius: 1vw;
+      box-shadow: 0 0 44px 10px #fffad4cc;
+      animation: lightningBolt 7s linear infinite;
+      z-index: 2;
+    }
+    @keyframes lightningBolt {
+      0%, 24%, 100% { opacity: 0;}
+      25% { opacity: 1;}
+      26% { opacity: 0;}
+      46% { opacity: 0;}
+      47% { opacity: 1;}
+      48% { opacity: 0;}
+    }
+
+    /* UI Styles */
+    .container {max-width: 420px;width: 94%;padding: 20px;position: relative;z-index: 10;}
+    .theme-switch {
+      position: fixed;top: 22px;right: 24px;background: var(--btn-bg);color: var(--btn-cl);
+      border:none;border-radius:20px;padding:8px 18px;font-size:1rem;cursor:pointer;z-index:99;
+    }
+    .theme-switch:hover {background: #34495e;color: #fff;}
+    .search-section {
+      display: flex;margin-bottom: 14px;gap: 7px;justify-content: center;
+    }
+    .search-section input {
+      padding: 9px 12px;border-radius: 18px;border: 1px solid #bbb;width: 64%;
+      outline: none;font-size: 1rem;background: var(--card-bg);color: var(--font);transition: background 0.3s;
+    }
+    .search-section button {
+      background: var(--btn-bg);color: var(--btn-cl);border: none;border-radius: 16px;padding: 8px 15px;
+      cursor: pointer;font-size: 1rem;
+    }
+    .weather-card {
+      background: var(--card-bg);border-radius: 15px;padding: 19px;box-shadow: var(--shadow);
+      text-align: center;transition: background 0.3s,color 0.3s;backdrop-filter: blur(10px);
+    }
+    .weather-card h1 { font-size: 1.7rem;margin-bottom: 6px; color: var(--font);}
+    .weather-emoji { font-size: 2.2rem; margin: 8px 0;}
+    .temperature {font-size: 2.2rem;font-weight: bold;}
+    .description { font-size: 1.1rem; text-transform: capitalize; color: #555; margin-bottom: 12px;}
+    [data-theme=dark] .description {color: #ccc;}
+    .details {display: grid;grid-template-columns: 1fr 1fr;gap: 10px;margin-top: 13px;}
+    .detail-item {background: var(--detail-bg);padding: 8px;border-radius: 8px;font-size: 0.89rem;}
+    .error { color: #e74c3c;font-size:1rem;margin:7px;display:none;}
+    .loading { font-size: 1rem; color: #555; margin: 5px; display: none;}
+    .forecast-section {
+      margin-top: 21px;background: var(--card-bg);border-radius:13px;box-shadow:0 2px 8px rgba(30,30,30,.08);
+      padding:13px 8px 3px 8px;display:flex;flex-direction:column;align-items:center;transition:background .3s;
+      backdrop-filter: blur(10px);
+    }
+    .forecast-header {font-weight: bold;font-size: 1.07rem;margin-bottom:5px;}
+    .forecast-scroll {display:flex;gap:9px;overflow-x:auto;width:100%;padding-bottom:7px;}
+    .forecast-item {text-align:center;min-width:61px;background:var(--detail-bg);border-radius:9px;
+      padding:8px 5px 5px 5px;font-size:0.93rem;color:var(--font);}
+    .forecast-item .icon { font-size:1.3rem;}
+    #map {height:230px;margin-top:22px;border-radius:15px;overflow:hidden;z-index:1;box-shadow:0 2px 9px rgba(30,30,30,0.15);}
+    /* Chatbot styles */
+    .chat-button {position:fixed;bottom:20px;right:20px;background:#2c3e50;color:white;border:none;
+      border-radius:50%;width:60px;height:60px;font-size:1.5rem;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,0.3);
+      display:flex;align-items:center;justify-content:center;transition:transform 0.3s;z-index:50;}
+    .chat-button:hover {transform:scale(1.1);}
+    .chatbot {position:fixed;top:0;right:-100%;width:350px;height:100vh;background:rgba(255,255,255,0.98);
+      box-shadow:-2px 0 10px rgba(0,0,0,0.2);transition:right 0.3s ease-in-out;display:flex;flex-direction:column;z-index:99;
+      backdrop-filter: blur(10px);}
+    .chatbot.open {right:0;}
+    .chatbot-header {background:#2c3e50;color:white;padding:15px;display:flex;justify-content:space-between;align-items:center;}
+    .chatbot-header h2 {font-size:1.2rem;}
+    .close-chat {background:none;border:none;color:white;font-size:1.2rem;cursor:pointer;}
+    .chatbot-body {flex-grow:1;padding:15px;overflow-y:auto;display:flex;flex-direction:column;gap:10px;}
+    .message {max-width:80%;padding:10px;border-radius:10px;font-size:0.9rem;}
+    .user-message {background:#71b7e6;color:white;align-self:flex-end;border-bottom-right-radius:2px;}
+    .ai-message {background:#e0e0e0;color:#333;align-self:flex-start;border-bottom-left-radius:2px;}
+    .typing-indicator {display:none;align-self:flex-start;padding:10px;}
+    .typing-indicator span {display:inline-block;width:8px;height:8px;background:#999;border-radius:50%;
+      margin-right:4px;animation:typing 0.8s infinite;}
+    .typing-indicator span:nth-child(2) {animation-delay:0.2s;}
+    .typing-indicator span:nth-child(3) {animation-delay:0.4s;}
+    @keyframes typing {0%,100% {transform:translateY(0);}50% {transform:translateY(-5px);}}
+    .chatbot-input {padding:15px;border-top:1px solid #ddd;display:flex;gap:10px;}
+    .chatbot-input input {flex-grow:1;padding:10px;border:1px solid #ddd;border-radius:20px;outline:none;}
+    .chatbot-input button {background:#2c3e50;color:white;border:none;border-radius:20px;padding:10px 15px;cursor:pointer;}
+    .chatbot-input button:hover {background:#34495e;}
+    @media (max-width:480px) {
+      .container {width:98%;padding:8px;}
+      .search-section input {width:52%;}
+      .forecast-section {font-size:.95rem;}
+      .forecast-scroll {gap:7px;}
+      #map {height:160px;}
+      .theme-switch {top:7px;right:10px;padding:6px 10px;}
+      .chatbot {width:100%;}
+      .chat-button {bottom:15px;right:15px;width:50px;height:50px;font-size:1.2rem;}
+    }
+  </style>
+</head>
+<body data-theme="light">
+  <!-- Video Background -->
+  <video id="bg-video" autoplay muted loop playsinline>
+    <source src="https://cdn.coverr.co/videos/coverr-blue-sky-and-clouds-4739/1080p.mp4" type="video/mp4">
+  </video>
+  <div class="video-overlay"></div>
+
+  <button class="theme-switch" id="theme-switch">🌙 Dark</button>
+  <div class="container">
+      <div class="search-section">
+          <input id="search-input" placeholder="City or ZIP..." autocomplete="off"/>
+          <button id="search-btn">Search</button>
+          <button title="Use My Location" id="geo-btn">📍</button>
+      </div>
+      <div class="weather-card">
+          <h1 id="location">Getting location...</h1>
+          <div class="loading" id="loading">Loading weather data...</div>
+          <div class="weather-emoji" id="weather-emoji">⏳</div>
+          <div class="temperature" id="temperature">--°C</div>
+          <div class="description" id="description">--</div>
+          <div class="details">
+              <div class="detail-item">Humidity: <span id="humidity">--%</span></div>
+              <div class="detail-item">Wind: <span id="wind">-- km/h</span></div>
+              <div class="detail-item">Feels Like: <span id="feels-like">--°C</span></div>
+              <div class="detail-item">Pressure: <span id="pressure">-- hPa</span></div>
+          </div>
+          <div class="error" id="error"></div>
+      </div>
+      <div class="forecast-section" id="forecast-section" style="display:none">
+          <div class="forecast-header">Next 5 Days</div>
+          <div class="forecast-scroll" id="forecast-scroll"></div>
+      </div>
+      <div id="map"></div>
+  </div>
+
+  <!-- Chatbot (kept) -->
+  <button class="chat-button" id="chat-button">💬</button>
+  <div class="chatbot" id="chatbot">
+      <div class="chatbot-header">
+          <h2>Weather Assistant</h2>
+          <button class="close-chat" id="close-chat">✖</button>
+      </div>
+      <div class="chatbot-body" id="chat-body">
+          <div class="ai-message">Hello! I'm your weather assistant. Ask me anything! 😊</div>
+      </div>
+      <div class="chatbot-input">
+          <input type="text" id="chat-input" placeholder="Type your message...">
+          <button id="send-message">Send</button>
+      </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script>
+    // --------- CONFIG ---------
+    const WEATHER_API_KEY = 'f1908714c7112fd642dcf9863c219a66';
+    const GEMINI_API_KEY = 'AIzaSyDamaL_ZEMs8aOKMtn5foPtGRK8k-rkoCk';
+
+    // Weather video URLs (you can replace these with your own)
+    const weatherVideos = {
+      default: "https://cdn.coverr.co/videos/coverr-blue-sky-and-clouds-4739/1080p.mp4",
+      clear: "https://cdn.coverr.co/videos/coverr-sunny-sky-4743/1080p.mp4",
+      clouds: "https://cdn.coverr.co/videos/coverr-blue-sky-and-clouds-4739/1080p.mp4",
+      rain: "https://cdn.coverr.co/videos/coverr-rain-on-window-1555/1080p.mp4",
+      snow: "https://cdn.coverr.co/videos/coverr-snowing-4463/1080p.mp4",
+      thunderstorm: "https://cdn.coverr.co/videos/coverr-lightning-storm-4464/1080p.mp4",
+      mist: "https://cdn.coverr.co/videos/coverr-fog-in-the-forest-4741/1080p.mp4"
+    };
+
+    const weatherEmojis = {
+        'clear sky': '☀️','few clouds': '🌤️','scattered clouds': '⛅',
+        'broken clouds': '☁️','overcast clouds': '☁️','shower rain': '🌦️',
+        'rain': '🌧️','thunderstorm': '⛈️','snow': '❄️','mist': '🌫️',
+        'fog': '🌫️','haze': '🌫️','dust': '💨','sand': '💨',
+        'smoke': '💨','squall': '💨','tornado': '🌪️'
+    };
+    let currentWeatherData = null;
+    let currentLat = null, currentLon = null, map = null, mapMarker = null;
+
+    // THEME SWITCH
+    const themeBtn = document.getElementById('theme-switch');
+    themeBtn.addEventListener('click', () => {
+        const body = document.body;
+        const isDark = body.getAttribute('data-theme') === 'dark';
+        body.setAttribute('data-theme', isDark ? 'light' : 'dark');
+        themeBtn.textContent = isDark ? "🌙 Dark" : "☀️ Light";
+    });
+
+    // --- VIDEO BACKGROUND HANDLERS ---
+    function setWeatherVideo(desc = '', main = '') {
+      const bgVideo = document.getElementById('bg-video');
+      let src = weatherVideos.default;
+      
+      desc = desc.toLowerCase();
+      main = main.toLowerCase();
+      
+      if (main.includes('clear') || desc.includes('clear')) {
+        src = weatherVideos.clear;
+      } else if (main.includes('cloud') || desc.includes('cloud')) {
+        src = weatherVideos.clouds;
+      } else if (main.includes('rain') || main.includes('drizzle') || desc.includes('rain')) {
+        src = weatherVideos.rain;
+      } else if (main.includes('snow') || desc.includes('snow')) {
+        src = weatherVideos.snow;
+      } else if (main.includes('thunder') || desc.includes('thunder')) {
+        src = weatherVideos.thunderstorm;
+      } else if (main.includes('mist') || main.includes('fog') || desc.includes('mist') || desc.includes('fog')) {
+        src = weatherVideos.mist;
+      }
+
+      if (bgVideo.src !== src) {
+        bgVideo.style.opacity = 0.3;
+        setTimeout(() => {
+          bgVideo.src = src;
+          bgVideo.load();
+          bgVideo.oncanplay = () => { 
+            bgVideo.style.opacity = 0.7; 
+          };
+        }, 400);
+      }
+    }
+
+    // --- WEATHER ANIMATION HANDLERS ---
+    function clearWeatherEffects() {
+        // Remove bg classes and dynamic elements
+        document.body.classList.remove('sunny-bg','rainy-bg','snowy-bg','stormy-bg');
+        // Remove dynamically inserted rain/snow/lightning elements
+        document.querySelectorAll('.rain-drop,.snowflake,.lightning').forEach(el=>el.remove());
+    }
+
+    function applyWeatherAnimation(desc = '', main = '') {
+        clearWeatherEffects();
+        
+        // Set video background first
+        setWeatherVideo(desc, main);
+        
+        desc = desc.toLowerCase();
+        if (desc.includes('thunder')) {
+          // Add lightning effect (1 bolt)
+          const bolt = document.createElement('div');
+          bolt.className = 'lightning';
+          document.body.appendChild(bolt);
+        } else if (desc.includes('rain') || desc.includes('drizzle')) {
+          // Add rain drops
+          for(let i=0;i<24;i++){
+            const drop = document.createElement('div');
+            drop.className = 'rain-drop';
+            drop.style.left = (3 + Math.random() * 94) + 'vw';
+            drop.style.animationDelay = (Math.random()*0.9) + 's';
+            drop.style.animationDuration = (0.5+Math.random()) + 's';
+            document.body.appendChild(drop);
+          }
+        } else if (desc.includes('snow') || desc.includes('sleet')) {
+          // Add snowflakes (❄️ or ❅)
+          const snowIcons = ['❄️','❅','❆'];
+          for(let i=0;i<18;i++){
+            const snow = document.createElement('div');
+            snow.className = 'snowflake';
+            snow.textContent = snowIcons[Math.floor(Math.random()*snowIcons.length)];
+            snow.style.left = (Math.random()*99)+'vw';
+            snow.style.fontSize = (1+Math.random()*0.7)+'rem';
+            snow.style.animationDelay = (Math.random()*5)+'s';
+            snow.style.animationDuration = (6+Math.random()*4)+'s';
+            document.body.appendChild(snow);
+          }
+        }
+    }
+
+    // --- UI Helpers ---
+    function showError(message) {
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('error').style.display = 'block';
+        document.getElementById('error').textContent = message;
+        document.getElementById('weather-emoji').textContent = '⚠️';
+        setWeatherVideo('', ''); // fallback video
+    }
+    function hideError() { document.getElementById('error').style.display = 'none'; }
+    function showLoading(msg) {
+        document.getElementById('loading').style.display = 'block';
+        document.getElementById('loading').textContent = msg || "Loading...";
+    }
+    function hideLoading() { document.getElementById('loading').style.display = 'none'; }
+
+    // Weather
+    async function getWeatherData({lat, lon, q}) {
+        hideError();
+        showLoading();
+        let url="";
+        if(typeof q==="string") {
+            url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(q)}&units=metric&appid=${WEATHER_API_KEY}`;
+        } else if(lat && lon) {
+            url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=metric&appid=${WEATHER_API_KEY}`;
+        } else return;
+        try {
+            const response = await fetch(url);
+            if(!response.ok) throw new Error("Not found");
+            const data = await response.json();
+            updateUI(data);
+            currentLat = data.coord.lat;
+            currentLon = data.coord.lon;
+            updateMap(currentLat, currentLon, data.name);
+            fetchForecast(currentLat, currentLon);
+            // Animation: set bg and video for weather
+            applyWeatherAnimation(data.weather[0].description || '', data.weather[0].main || '');
+        } catch(e) {
+            showError("Unable to fetch weather data. Please try again later.");
+        }
+    }
+
+    function updateUI(data) {
+        currentWeatherData = data;
+        hideLoading(); hideError();
+        document.getElementById('location').textContent = data.name || "--";
+        document.getElementById('temperature').textContent = `${Math.round(data.main.temp)}°C`;
+        document.getElementById('description').textContent = data.weather[0].description;
+        document.getElementById('humidity').textContent = `${data.main.humidity}%`;
+        document.getElementById('wind').textContent = `${(data.wind.speed*3.6).toFixed(1)} km/h`;
+        document.getElementById('feels-like').textContent = `${Math.round(data.main.feels_like)}°C`;
+        document.getElementById('pressure').textContent = `${data.main.pressure} hPa`;
+        const weatherDescription = data.weather[0].description.toLowerCase();
+        document.getElementById('weather-emoji').textContent =
+            weatherEmojis[weatherDescription] || '🌡️';
+    }
+
+    // 5-Day Forecast
+    async function fetchForecast(lat, lon) {
+        const scrollDiv = document.getElementById('forecast-scroll');
+        const section = document.getElementById('forecast-section');
+        section.style.display = "none";
+        try {
+            const r = await fetch(`https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&units=metric&appid=${WEATHER_API_KEY}`);
+            if(!r.ok) return;
+            const data = await r.json();
+            let dayItems = [];
+            const dates = new Set();
+            for(const item of data.list){
+                const dt = new Date(item.dt*1000);
+                const hours = dt.getHours();
+                if((hours===12||hours===15) && dayItems.length<5 && !dates.has(dt.toDateString())){
+                    dayItems.push(item);
+                    dates.add(dt.toDateString());
+                }
+            }
+            if(dayItems.length<5) dayItems = data.list.filter((_,i)=>i%8===4).slice(0,5);
+            scrollDiv.innerHTML = '';
+            dayItems.forEach(item=>{
+                const dt = new Date(item.dt*1000);
+                const daystr = dt.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'});
+                const desc = item.weather[0].description;
+                const ic = weatherEmojis[desc.toLowerCase()] || "🌡️";
+                scrollDiv.innerHTML += `<div class="forecast-item">
+                    <div class="date">${daystr}</div>
+                    <div class="icon">${ic}</div>
+                    <div class="minmax">${Math.round(item.main.temp_min)}° / ${Math.round(item.main.temp_max)}°C</div>
+                    <div style="font-size:.99em">${desc}</div>
+                </div>`;
+            });
+            section.style.display="";
+        } catch(e){section.style.display="none"}
+    }
+
+    // Leaflet Map
+    function updateMap(lat, lon, locationName){
+        if(!map){
+            map = L.map('map').setView([lat, lon], 10);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 18, attribution: '© OpenStreetMap'
+            }).addTo(map);
+        } else map.setView([lat,lon], 10);
+        if(mapMarker) map.removeLayer(mapMarker);
+        mapMarker = L.marker([lat,lon]).addTo(map).bindPopup(locationName).openPopup();
+    }
+
+    // Geolocation & Search
+    document.getElementById('geo-btn').onclick = getLocationWeather;
+    function getLocationWeather(){
+        showLoading("Getting your location...");
+        if(navigator.geolocation){
+            navigator.geolocation.getCurrentPosition(async pos=>{
+                getWeatherData({lat:pos.coords.latitude, lon:pos.coords.longitude});
+            }, err=>{
+                showError("Location access denied.");
+            });
+        } else showError("Geolocation is not supported by this browser.");
+    }
+    document.getElementById('search-btn').onclick = ()=>{
+        const v = document.getElementById('search-input').value.trim();
+        if(v) getWeatherData({q: v});
+    };
+    document.getElementById('search-input').addEventListener('keypress',(e)=>{
+        if(e.key==='Enter'){
+            const v = document.getElementById('search-input').value.trim();
+            if(v) getWeatherData({q: v});
+        }
+    });
+
+    // Initial load
+    window.onload = getLocationWeather;
+
+    // --- Gemini AI Chatbot Logic (UNCHANGED) ---
+    const chatButton = document.getElementById('chat-button');
+    const chatbot = document.getElementById('chatbot');
+    const closeChat = document.getElementById('close-chat');
+    const sendMessage = document.getElementById('send-message');
+    const chatInput = document.getElementById('chat-input');
+    const chatBody = document.getElementById('chat-body');
+
+    chatButton.addEventListener('click', () => {
+        chatbot.classList.toggle('open');
+    });
+    closeChat.addEventListener('click', () => {
+        chatbot.classList.remove('open');
+    });
+    function addMessage(content, isUser) {
+        const message = document.createElement('div');
+        message.classList.add('message', isUser ? 'user-message' : 'ai-message');
+        message.textContent = content;
+        chatBody.appendChild(message);
+        chatBody.scrollTop = chatBody.scrollHeight;
+    }
+    function showTypingIndicator() {
+        const typing = document.createElement('div');
+        typing.classList.add('typing-indicator');
+        typing.innerHTML = '<span></span><span></span><span></span>';
+        chatBody.appendChild(typing);
+        typing.style.display = 'flex';
+        chatBody.scrollTop = chatBody.scrollHeight;
+        return typing;
+    }
+    function removeTypingIndicator(typingElement) {
+        if (typingElement) typingElement.remove();
+    }
+    async function getGeminiResponse(message) {
+        const temperatureDetails = currentWeatherData
+            ? `Temperature: ${Math.round(currentWeatherData.main.temp)}°C, Feels Like: ${Math.round(currentWeatherData.main.feels_like)}°C, ${currentWeatherData.weather[0].description}, Humidity: ${currentWeatherData.main.humidity}%, Wind: ${(currentWeatherData.wind.speed * 3.6).toFixed(1)} km/h`
+            : 'Weather data unavailable';
+        const requestBody = {
+            contents: [{
+                parts: [{
+                    text: `Based on the current temperature ${temperatureDetails} ${message}`
+                }]
+            }]
+        };
+        try {
+            const response = await fetch(
+                'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent',
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-goog-api-key': GEMINI_API_KEY
+                    },
+                    body: JSON.stringify(requestBody)
+                }
+            );
+            if (!response.ok) throw new Error('Failed to fetch AI response');
+            const data = await response.json();
+            return data.candidates[0].content.parts[0].text;
+        } catch (error) {
+            return 'Sorry, I couldnt process your request. Please try again later.';
+        }
+    }
+    async function handleSendMessage() {
+        const message = chatInput.value.trim();
+        if (message) {
+            addMessage(message, true);
+            chatInput.value = '';
+            const typingIndicator = showTypingIndicator();
+            const aiResponse = await getGeminiResponse(message);
+            removeTypingIndicator(typingIndicator);
+            addMessage(aiResponse, false);
+        }
+    }
+    sendMessage.addEventListener('click', handleSendMessage);
+    chatInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter' && chatInput.value.trim()) handleSendMessage();
+    });
+  </script>
+</body>
+</html>

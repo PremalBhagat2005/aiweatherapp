@@ -1,0 +1,9 @@
+
+
+
+const WEATHER_API_KEY = 'f1908714c7112fd642dcf9863c219a66';
+const GEMINI_API_KEY = 'AIzaSyDamaL_ZEMs8aOKMtn5foPtGRK8k-rkoCk';
+
+
+
+
