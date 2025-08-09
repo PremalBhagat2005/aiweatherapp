@@ -338,7 +338,7 @@
         // Fetch AQI after weather loaded
         getAQI(lat, lon);
       } catch {
-        showError("Unable to fetch weather. Try again.");
+        showError("Unable to fetch weather. Try again later.");
       }
     }
 
@@ -528,7 +528,7 @@
         if (data.promptFeedback && data.promptFeedback.blockReason) {
           return "Sorry, my response was blocked due to API policy (" + data.promptFeedback.blockReason + ").";
         }
-        return 'Sorry, I did not get a valid reply from Gemini right now.';
+        return 'Sorry for delay, I did not get a valid reply from Gemini right now.';
       } catch (err) {
         return 'Sorry, I could not process your request right now.';
       }
